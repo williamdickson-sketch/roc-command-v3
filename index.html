@@ -69,6 +69,7 @@ th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #333;font-size:14
  .brand{font-size:22px}
  .role{display:none}
 }
+#accountsGrid .record{border-color:#4a4a4a}
 </style>
 </head>
 <body>
@@ -184,14 +185,20 @@ th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #333;font-size:14
 
 <section id="admin" class="page">
   <div class="toolbar"><h1>Administration</h1></div>
-  <div id="adminDenied" class="card hidden">
-    <h2>Restricted</h2><p class="muted">Only the Founder can manage user roles and system settings.</p>
-  </div>
+  <div id="adminDenied" class="card hidden"><h2>Restricted</h2><p class="muted">Only the Founder can manage accounts.</p></div>
   <div id="adminContent">
     <div class="card hub">
-      <h2>User Accounts</h2>
-      <p class="muted">Authentication users are created or invited in Supabase. Manage their ROC role and status here.</p>
-      <div id="profilesGrid" class="grid"></div>
+      <div class="toolbar compact"><h2>User Accounts</h2><button id="refreshAccounts" class="secondary">Refresh</button></div>
+      <div class="card" style="margin-bottom:14px">
+        <h3>Create Account</h3>
+        <label>Full Name<input id="newUserName"></label>
+        <label>Email<input id="newUserEmail" type="email"></label>
+        <label>Temporary Password<input id="newUserPassword" type="password" minlength="8"></label>
+        <label>Role<select id="newUserRole"><option value="officer">Officer</option><option value="supervisor">Supervisor</option><option value="deputy_director">Deputy Director</option><option value="founder">Founder</option></select></label>
+        <button id="createAccount" class="primary">Create Account</button>
+        <p id="accountActionMsg" class="msg"></p>
+      </div>
+      <div id="accountsGrid" class="grid"></div>
     </div>
     <div class="card hub">
       <h2>Company Settings</h2>
@@ -201,10 +208,7 @@ th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #333;font-size:14
       <label>Company Address<textarea id="companyAddress"></textarea></label>
       <button id="saveCompanySettings" class="primary">Save Settings</button>
     </div>
-    <div class="card">
-      <h2>Connection</h2>
-      <button id="clearConnection" class="danger">Clear Supabase Connection</button>
-    </div>
+    <div class="card"><h2>Connection</h2><button id="clearConnection" class="danger">Clear Supabase Connection</button></div>
   </div>
 </section>
 </main>
@@ -360,24 +364,67 @@ async function renderDocuments(){
   $('#documentsGrid').innerHTML=rows.join('')||empty;
 }
 
+
+async function callUserAdmin(action,payload={}){
+  const {data,error}=await sb.functions.invoke('roc-user-admin',{body:{action,...payload}});
+  if(error) throw new Error(error.message||'Function request failed.');
+  if(data?.error) throw new Error(data.error);
+  return data;
+}
+
 async function loadAdmin(){
-  const {data,error}=await sb.from('profiles').select('*').order('created_at',{ascending:false});
-  if(error){$('#profilesGrid').innerHTML=`<p class="msg">${esc(error.message)}</p>`;return}
-  $('#profilesGrid').innerHTML=(data||[]).map(x=>`<article class="record">
-    <h3>${esc(x.full_name||x.id)}</h3><p>${esc(x.id)}</p>
-    <label>Role<select data-role-id="${esc(x.id)}">
-      ${['founder','deputy_director','supervisor','officer'].map(r=>`<option value="${r}" ${x.role===r?'selected':''}>${roleName(r)}</option>`).join('')}
-    </select></label>
-    <label>Status<select data-status-id="${esc(x.id)}"><option value="active" ${x.status==='active'?'selected':''}>active</option><option value="inactive" ${x.status==='inactive'?'selected':''}>inactive</option></select></label>
-    <label>Name<input data-name-id="${esc(x.id)}" value="${esc(x.full_name||'')}"></label>
-    <button class="primary" data-save-profile="${esc(x.id)}">Save Account</button>
-  </article>`).join('')||empty;
-  $$('[data-save-profile]').forEach(b=>b.onclick=async()=>{
-    const id=b.dataset.saveProfile;
-    const role=$(`[data-role-id="${id}"]`).value,status=$(`[data-status-id="${id}"]`).value,full_name=$(`[data-name-id="${id}"]`).value.trim();
-    const {error}=await sb.from('profiles').update({role,status,full_name}).eq('id',id);
-    alert(error?error.message:'Account updated.');
-  });
+  if(!isFounder()) return;
+  $('#accountsGrid').innerHTML='<p class="muted">Loading accounts…</p>';
+  try{
+    const result=await callUserAdmin('list');
+    const accounts=result.accounts||[];
+    $('#accountsGrid').innerHTML=accounts.map(account=>{
+      const p=account.profile||{};
+      const role=p.role||'officer';
+      const status=p.status||'active';
+      return `<article class="record">
+        <h3>${esc(p.full_name||account.email||account.id)}</h3>
+        <p>${esc(account.email||'No email')}</p>
+        <p>Created: ${account.created_at?new Date(account.created_at).toLocaleString():'Unknown'}</p>
+        <p>Last sign-in: ${account.last_sign_in_at?new Date(account.last_sign_in_at).toLocaleString():'Never'}</p>
+        <label>Name<input data-account-name="${esc(account.id)}" value="${esc(p.full_name||'')}"></label>
+        <label>Role<select data-account-role="${esc(account.id)}">${['founder','deputy_director','supervisor','officer'].map(r=>`<option value="${r}" ${role===r?'selected':''}>${roleName(r)}</option>`).join('')}</select></label>
+        <label>Status<select data-account-status="${esc(account.id)}"><option value="active" ${status==='active'?'selected':''}>active</option><option value="inactive" ${status==='inactive'?'selected':''}>inactive</option></select></label>
+        <div class="actions">
+          <button class="primary" data-account-save="${esc(account.id)}">Save Account</button>
+          <button class="danger" data-account-delete="${esc(account.id)}">Delete Permanently</button>
+        </div>
+      </article>`;
+    }).join('')||empty;
+
+    $$('[data-account-save]').forEach(btn=>btn.onclick=async()=>{
+      const id=btn.dataset.accountSave;
+      try{
+        await callUserAdmin('update',{
+          user_id:id,
+          full_name:$(`[data-account-name="${id}"]`).value.trim(),
+          role:$(`[data-account-role="${id}"]`).value,
+          status:$(`[data-account-status="${id}"]`).value
+        });
+        alert('Account updated.');
+        await loadAdmin();
+      }catch(err){alert(err.message)}
+    });
+
+    $$('[data-account-delete]').forEach(btn=>btn.onclick=async()=>{
+      const id=btn.dataset.accountDelete;
+      if(!confirm('Permanently delete this account?')) return;
+      if(!confirm('Confirm permanent deletion.')) return;
+      try{
+        await callUserAdmin('delete',{user_id:id,permanent:true});
+        alert('Account deleted.');
+        await loadAdmin();
+      }catch(err){alert(err.message)}
+    });
+  }catch(err){
+    $('#accountsGrid').innerHTML=`<p class="msg">${esc(err.message)}</p>`;
+  }
+
   const settings=await sb.from('system_settings').select('*').limit(1).maybeSingle();
   if(settings.data){
     $('#companyName').value=settings.data.company_name||'';
@@ -387,6 +434,26 @@ async function loadAdmin(){
     $('#saveCompanySettings').dataset.id=settings.data.id;
   }
 }
+
+$('#refreshAccounts').onclick=()=>loadAdmin();
+$('#createAccount').onclick=async()=>{
+  $('#accountActionMsg').textContent='Creating account…';
+  try{
+    await callUserAdmin('create',{
+      full_name:$('#newUserName').value.trim(),
+      email:$('#newUserEmail').value.trim(),
+      password:$('#newUserPassword').value,
+      role:$('#newUserRole').value
+    });
+    $('#accountActionMsg').textContent='Account created.';
+    $('#newUserName').value='';
+    $('#newUserEmail').value='';
+    $('#newUserPassword').value='';
+    $('#newUserRole').value='officer';
+    await loadAdmin();
+  }catch(err){$('#accountActionMsg').textContent=err.message}
+};
+
 $('#saveCompanySettings').onclick=async()=>{
   const values={company_name:$('#companyName').value.trim(),company_phone:$('#companyPhone').value.trim(),company_email:$('#companyEmail').value.trim(),company_address:$('#companyAddress').value.trim(),timezone:'America/Los_Angeles'};
   const id=$('#saveCompanySettings').dataset.id;
