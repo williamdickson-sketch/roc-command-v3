@@ -1,16 +1,8 @@
-ROC Command 3.2 — Clean Rebuild
+ROC Command 3.3 — Officer Profiles & Equipment Tracking
 
-This is a fresh, single-file rebuild with:
-- Home dashboard
-- Command Hub
-- Operations Hub
-- Clients & Sites
-- Camera Center
-- Digital Library
-- Admin tab
-- Secure account creation, role changes, activation/deactivation, and deletion through `roc-user-admin`
+Adds officer profiles, badge numbers, emergency contacts, certification tracking, training notes, and equipment inventory.
 
-Upload only `index.html` and `README.md` to the root of the `roc-command-v3` repository.
-
-After committing, wait for GitHub Pages to publish and open:
-https://williamdickson-sketch.github.io/roc-command-v3/?v=320
+Install:
+1. Run supabase_officer_equipment_setup.sql in Supabase.
+2. Replace index.html and README.md in roc-command-v3.
+3. Open the site with ?v=330.
