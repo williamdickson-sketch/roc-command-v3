@@ -1,11 +1,16 @@
-ROC Command 3.1 — Secure Account Administration
+ROC Command 3.2 — Clean Rebuild
 
-Adds account creation, listing, role changes, activation/deactivation, and permanent deletion through the deployed Supabase Edge Function `roc-user-admin`.
+This is a fresh, single-file rebuild with:
+- Home dashboard
+- Command Hub
+- Operations Hub
+- Clients & Sites
+- Camera Center
+- Digital Library
+- Admin tab
+- Secure account creation, role changes, activation/deactivation, and deletion through `roc-user-admin`
 
-Only an active Founder can use these controls.
+Upload only `index.html` and `README.md` to the root of the `roc-command-v3` repository.
 
-Install:
-1. Replace index.html and README.md in roc-command-v3.
-2. Commit changes.
-3. Wait for GitHub Pages to deploy.
-4. Open the site with ?v=310.
+After committing, wait for GitHub Pages to publish and open:
+https://williamdickson-sketch.github.io/roc-command-v3/?v=320
